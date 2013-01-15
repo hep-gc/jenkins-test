@@ -22,7 +22,7 @@ process.wait()
 out,err = process.communicate()
 print out
 if "Error:" in out:
-    sys.exit(retcode)
+    sys.exit(1)
 
 #If VM is launched, recover hostname from output, and ping the machine until its ready.
 hostname = re.findall(r'Hostname = (.*?)\n', out)
