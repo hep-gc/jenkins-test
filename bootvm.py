@@ -13,8 +13,11 @@ out,err = process.communicate()
 if retcode != 0:
     sys.exit(retcode)
 
+arg = sys.argv[1:]
+cmd = ["/usr/local/bin/vm-run"] + arg
+
 #Boot VM if valid proxyuser.
-process = subprocess.Popen(["/usr/local/bin/vm-run","-s","/var/lib/jenkins/.ssh/id_rsa.pub","-R","jenkins.gz"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 process.wait()
 out,err = process.communicate()
 print out
