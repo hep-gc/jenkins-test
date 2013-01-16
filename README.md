@@ -1,6 +1,8 @@
 #Overview
 Python script used to boot a virtual machine using **[repoman](https://github.com/hep-gc/repoman)** / **[vm-run](https://github.com/hep-gc/vm-helpers)**, it will then copy a user defined script into a user defined directory on the created virtual machine and run it, which can then be monitored by **[jenkins](http://jenkins-ci.org/)**.
 
+Works for Python 2.6+.
+
 ##Usage
 Running this script acts in a similar fashion as **[vm-run](https://github.com/hep-gc/vm-helpers)**.
 It also features two additional parametres for copying a local file onto the newly booted virtual machine:
