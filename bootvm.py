@@ -21,12 +21,23 @@ USAGE = "\nScript Usage (not including vm-run arguments): \n\
         
 # Check myproxy credentials. If error, exit, else credentials are valid.
 def check_myproxy_logon():
-    process = subprocess.Popen(["/usr/local/bin/repoman","whoami"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    process.wait()
-    retcode = process.returncode
-    out,err = process.communicate()
-    if retcode != 0:
-        raise Exception(out)
+    try:
+        process = subprocess.Popen(["/usr/local/bin/repoman","whoami"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process.wait()
+        retcode = process.returncode
+        out,err = process.communicate()
+
+        if retcode != 0:
+            # we don't have valid credential
+            # repoman will tell you what the problem is 
+            print out
+            sys.exit(1)
+
+    except OSError as e:
+        print "Error({0}): {1}. Is repoman AND vm-run installed?".format(e.errno,e.strerror)
+        retcode = process.returncode
+        out,err = process.communicate()
+        if retcode != 0:
 
         
 # Process the passed in arguments and creates vm-run command
