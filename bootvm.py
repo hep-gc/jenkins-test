@@ -15,7 +15,7 @@ LONG_REMOTE_PATH = '--remotepath'
 # Simple usage print out if arguments were not properly input
 USAGE = "\nScript Usage (not including vm-run arguments): \n\
         [{0} | {1}] - local path to file you want to copy onto created virtual machine. \n\
-        [{2} | {3}] - path on virtual machine where the file (see -lp) will be copied to.".format(SHORT_LOCAL_PATH,LONG_LOCAL_PATH,SHORT_REMOTE_PATH,LONG_REMOTE_PATH)
+        [{2} | {3}] - path on virtual machine where the file (see -lp) will be copied to.\n".format(SHORT_LOCAL_PATH,LONG_LOCAL_PATH,SHORT_REMOTE_PATH,LONG_REMOTE_PATH)
 
         
 # Check myproxy credentials. If error, exit, else credentials are valid.
@@ -77,15 +77,16 @@ def boot_virtual_machine(cmd):
 def virtual_machine_status(hostname):
     print "Virtual machine booting with hostname " + hostname + "... Please wait."
     process = subprocess.Popen(["ping","-c","1", hostname], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    retcode =  process.wait()
+    process.wait()
+    retcode = process.returncode
     while retcode != 0:
-        process = subprocess.Popen(["ping","-n","1", hostname], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = subprocess.Popen(["ping","-c","1", hostname], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         process.wait()
-        retcode =  process.poll()
+        retcode =  process.returncode
         
 
 # Then copy echo.py script onto newly created VM and run it.
-def secure_copy_file(hostname,localpath,remotepath):
+def secure_copy_file(hostname,localpath,remotepath,filename):
     print "Copying " + filename + " into " + remotepath + " on " + hostname
     cmd = "/usr/bin/scp " + localpath + " root@" + hostname + ":" + remotepath
     process =  subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -106,11 +107,11 @@ def run_remote_file(hostname,remotepath,filename):
     print out
     if retcode != 0:
         raise Exception(err)
-    sanity_check(out)
+    sanity_check(hostname,out)
 
     
 # Check whether the hostname from vm-run and hostname returned from echo.py on the vm is the same.
-def sanity_check(out):
+def sanity_check(hostname,out):
     vmhostname = re.findall(r'Hostname: (.*?)\n', out)
     if vmhostname:
         vmhostname = vmhostname[0]
@@ -125,31 +126,31 @@ def sanity_check(out):
 def main():
     try:
         check_myproxy_logon()
-        
+       
         cmd,localpath,remotepath,filename = process_arguments()
-        
+       
         hostname = boot_virtual_machine(cmd)
         print "Virtual machine ready!"
+
+        virtual_machine_status(hostname)
         print "Waiting for SSH Server to become available..."
         time.sleep( 10 )
         
-        virtual_machine_status(hostname)
-        
-        secure_copy_file(hostname,localpath,remotepath)
+        secure_copy_file(hostname,localpath,remotepath,filename)
         
         run_remote_file(hostname,remotepath,filename)
         
-        sys.exit(0)
     except IndexError as e:
         print USAGE
         sys.exit(1)
     except OSError as e:
         print "Error({0}): {1}. Is repoman AND vm-run installed?".format(e.errno,e.strerror)
-        sys.exit(1)
+        sys.exit(e.errno)
     except Exception as e:
         print e
         sys.exit(1)
-    
+    else:
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()
