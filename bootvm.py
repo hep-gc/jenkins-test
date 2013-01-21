@@ -26,7 +26,7 @@ USAGE = "\nbootvm.py Usage (not including vm-run arguments): \n\
         [{0} | {1}] - local path to file you want to copy onto created virtual machine. \n\
         [{2} | {3}] - path on virtual machine where the file (see {0}) will be copied to.\n".format(SHORT_LOCAL_PATH,LONG_LOCAL_PATH,SHORT_REMOTE_PATH,LONG_REMOTE_PATH)
 
-        
+
 # Timeout feature for subprocess.Popen - polls the process for timeout seconds waiting for it to complete
 # If the process has exited return False (process did not timeout)
 # Else if the process times out attempt to terminate the process or kill if terminate fails and return True (process timed out)
@@ -62,18 +62,15 @@ def run_command(cmd, timeout=180, use_shell=False):
         if check_popen_timeout(process,timeout):
             print "Command: '{0}' Timed out. Quitting...".format(cmd)
             sys.exit(1)
-
         process.wait()
-
         retcode = process.returncode
         out,err = process.communicate()
-
         return out,err,retcode
     except OSError as e:
-        print "Error({0}): {1}. ".format(e.errno,e.strerror)
-        raise
+        print "Error occured while running: '{0}'\nError({1}): {2} ".format(cmd,e.errno,e.strerror)
+        sys.exit(e.errno)
 
-# will find all matches to pattern, but we only want first match.    
+# will find all matches to pattern, but we only want first match.
 def regex_find(pattern,str):
     match = re.findall(pattern,str)
     if not match:
@@ -95,100 +92,76 @@ def process_arguments():
         sys.exit(1)
     return file_args,vmrun_args
 
-# Check myproxy credentials. 
+# Check myproxy credentials.
 def check_myproxy_logon():
-    try:
-        cmd = ["/usr/local/bin/repoman","whoami"]
-        out,err,retcode = run_command(cmd)
-        if retcode != 0:
-            if out:
-                print out
-            if err:
-                print err
-            sys.exit(retcode)
-    # if repoman is not found exception will be caught here.
-    except OSError as e:
-        print "Is repoman installed?"
-        sys.exit(e.errno) 
-    
+    cmd = ["/usr/local/bin/repoman","whoami"]
+    out,err,retcode = run_command(cmd)
+    if retcode != 0:
+        if out:
+            print out
+        if err:
+            print err
+        sys.exit(retcode)
+
 # Boot virtual machine and return hostname.
-def boot_virtual_machine(vmrun_args): 
-    try:
-        cmd = ["/usr/local/bin/vm-run"] + vmrun_args
-        out,err,retcode = run_command(cmd,timeout=300)
-        if retcode != 0:
-            if out:
-                print out
-            if err:
-                print err
-            sys.exit(retcode)
-        print out
-        hostname = regex_find(r'Hostname = (.*?)\n', out)
-        return hostname
-    # if vm-run is not found the exception will be caught here.
-    except OSError as e:
-        print "Is vm-run installed?"
-        sys.exit(e.errno)
-    
+def boot_virtual_machine(vmrun_args):
+    cmd = ["/usr/local/bin/vm-run"] + vmrun_args
+    out,err,retcode = run_command(cmd,timeout=300)
+    if retcode != 0:
+        if out:
+            print out
+        if err:
+            print err
+        sys.exit(retcode)
+    print out
+    hostname = regex_find(r'Hostname = (.*?)\n', out)
+    return hostname
+
 # Pings the hostname until its ready.
 def virtual_machine_status(hostname):
-    try:
-        print "Virtual machine booting with hostname {0}... Please wait.\n".format(hostname)
-        cmd = ["ping","-c","1", hostname]
+    print "Virtual machine booting with hostname {0}... Please wait.\n".format(hostname)
+    cmd = ["ping","-c","1", hostname]
 
+    out,err,retcode = run_command(cmd)
+    # if ping does not receive any reply packets its return code is 1, indicating host is not accessible.
+    # keep pinging until host become available.
+    while retcode != 0:
         out,err,retcode = run_command(cmd)
-        # if ping does not receive any reply packets its return code is 1, indicating host is not accessible.
-        # keep pinging until host become available.
-        while retcode != 0:
-            out,err,retcode = run_command(cmd)
-            time.sleep( 3 )
-    # if ping is not found the exception will be caught here
-    except OSError as e:
-        print "ping not found."
-        sys.exit(e.errno)
+        time.sleep( 3 )
 
 # Copy file onto hostname using scp.
 def secure_copy_file(hostname,file_args):
-    try:
-        localpath = file_args.localpath
-        remotepath = file_args.remotepath
-        filename = os.path.basename(localpath)
+    localpath = file_args.localpath
+    remotepath = file_args.remotepath
+    filename = os.path.basename(localpath)
 
-        print "Copying {0} into {1} on {2}\n".format(filename,remotepath,hostname)
-        # create scp command using localpath, hostname, and remotepath 
-        cmd = "/usr/bin/scp -o StrictHostKeyChecking=false {0} root@{1}:{2}".format(localpath,hostname,remotepath)
-        out,err,retcode = run_command(cmd,use_shell=True)
-        if retcode != 0:
-            if out:
-                print out
-            if err:
-                print err
-            sys.exit(retcode)
-    # if scp is not found exception will be caught here. 
-    except OSError as e:
-        print "scp not found."
-        sys.exit(e.errno)
+    print "Copying {0} into {1} on {2}\n".format(filename,remotepath,hostname)
+    # create scp command.
+    cmd = ["/usr/bin/scp","-o","StrictHostKeyChecking=false",localpath,"root@{0}:{1}".format(hostname,remotepath)]
+    out,err,retcode = run_command(cmd)
+    if retcode != 0:
+       if out:
+           print out
+       if err:
+           print err
+       sys.exit(retcode)
 
 # Run file on hostname and return its output.
 def run_remote_file(hostname,file_args):
-    try:
-        filename = os.path.basename(file_args.localpath)
-        filepath = os.path.join(file_args.remotepath,filename)
+    filename = os.path.basename(file_args.localpath)
+    filepath = os.path.join(file_args.remotepath,filename)
 
-        cmd = "/usr/bin/ssh -o StrictHostKeyChecking=false root@{0} {1}".format(hostname,filepath)
-        out,err,retcode = run_command(cmd,use_shell=True)
-        if retcode != 0:
-            if out:
-                print out
-            if err:
-                print err
-            sys.exit(retcode)
-        print "{0}OUTPUT OF {1}{0}\n".format("="*25,filename)
-        return out
-    # if ssh is not found the exception will be caught here.
-    except OSError as e:
-        print "ssh not found."
-        sys.exit(e.errno)
+        # create ssh command
+    cmd = ["/usr/bin/ssh","-o","StrictHostKeyChecking=false","root@{0}".format(hostname),filepath]
+    out,err,retcode = run_command(cmd)
+    if retcode != 0:
+        if out:
+            print out
+        if err:
+            print err
+        sys.exit(retcode)
+    print "{0}OUTPUT OF {1}{0}\n".format("="*25,filename)
+    return out
 
 # Check whether the hostname from vm-run and hostname returned from script on the virtual machine are the same.
 def sanity_check(hostname,out):
@@ -211,7 +184,7 @@ def sanity_check(hostname,out):
 def main():
     try:
         check_myproxy_logon()
-      
+
         file_args,vmrun_args= process_arguments()
 
         hostname = boot_virtual_machine(vmrun_args)
