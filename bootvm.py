@@ -60,7 +60,7 @@ def run_command(cmd, timeout=180, use_shell=False):
     try:
         process = subprocess.Popen(cmd, shell=use_shell,  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if check_popen_timeout(process,timeout):
-            print "Process Timed out. Quitting..."
+            print "Command: '{0}' Timed out. Quitting...".format(cmd)
             sys.exit(1)
 
         process.wait()
