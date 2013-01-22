@@ -5,9 +5,9 @@
 # You may distribute under the terms of either the GNU General Public
 # License or the Apache v2 License.
 
-
 import subprocess
 import argparse
+import pexpect
 import time
 import sys
 import os
@@ -58,7 +58,7 @@ def check_popen_timeout(process, timeout=180):
 # runs a shell command using Popen and will terminate the command if it takes longer than timeout to complete.
 def run_command(cmd, timeout=180, use_shell=False):
     try:
-        process = subprocess.Popen(cmd, shell=use_shell,  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = subprocess.Popen(cmd, shell=use_shell,  stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         if check_popen_timeout(process,timeout):
             print "Command: '{0}' Timed out. Quitting...".format(cmd)
             sys.exit(1)
@@ -69,15 +69,6 @@ def run_command(cmd, timeout=180, use_shell=False):
     except OSError as e:
         print "Error occured while running: '{0}'\nError({1}): {2} ".format(cmd,e.errno,e.strerror)
         sys.exit(e.errno)
-
-# will find all matches to pattern, but we only want first match.
-def regex_find(pattern,str):
-    match = re.findall(pattern,str)
-    if not match:
-        print "No matches for '{0}'".format(pattern)
-        sys.exit(1)
-    else:
-        return match[0]
 
 # Process the passed in arguments and creates vm-run command
 def process_arguments():
@@ -97,10 +88,8 @@ def check_myproxy_logon():
     cmd = ["/usr/local/bin/repoman","whoami"]
     out,err,retcode = run_command(cmd)
     if retcode != 0:
-        if out:
-            print out
-        if err:
-            print err
+        if (out or err):
+            print out,err
         sys.exit(retcode)
 
 # Boot virtual machine and return hostname.
@@ -108,14 +97,28 @@ def boot_virtual_machine(vmrun_args):
     cmd = ["/usr/local/bin/vm-run"] + vmrun_args
     out,err,retcode = run_command(cmd,timeout=300)
     if retcode != 0:
-        if out:
-            print out
-        if err:
-            print err
+        if (out or err):
+            print out,err
         sys.exit(retcode)
     print out
-    hostname = regex_find(r'Hostname = (.*?)\n', out)
-    return hostname
+    hostname = re.findall(r'Hostname = (.*?)\n', out)
+    id = re.findall(r'Virtual Machine ID = (.*?)\n', out)
+    if not (hostname and id):
+        print "Could not resolve hostname or id."
+        sys.exit(1)
+    return id[0],hostname[0]
+
+# Kill VM with ID returns true for success.
+def kill_virtual_machine(id,hostname):
+    child = pexpect.spawn('/usr/local/bin/vm-list -a -k ?',timeout=120)
+    child.expect('exit:')
+    out = child.before.split('\n')
+    for line in out:
+        if hostname in line:
+            id = line.split()[0]
+    child.sendline(id)
+    child.expect(pexpect.EOF)
+    print child.before
 
 # Pings the hostname until its ready.
 def virtual_machine_status(hostname):
@@ -127,7 +130,7 @@ def virtual_machine_status(hostname):
     # keep pinging until host become available.
     while retcode != 0:
         out,err,retcode = run_command(cmd)
-        time.sleep( 3 )
+        time.sleep( 1 )
 
 # Copy file onto hostname using scp.
 def secure_copy_file(hostname,file_args):
@@ -140,10 +143,8 @@ def secure_copy_file(hostname,file_args):
     cmd = ["/usr/bin/scp","-o","StrictHostKeyChecking=false",localpath,"root@{0}:{1}".format(hostname,remotepath)]
     out,err,retcode = run_command(cmd)
     if retcode != 0:
-       if out:
-           print out
-       if err:
-           print err
+       if (out or err):
+           print out,err
        sys.exit(retcode)
 
 # Run file on hostname and return its output.
@@ -155,31 +156,27 @@ def run_remote_file(hostname,file_args):
     cmd = ["/usr/bin/ssh","-o","StrictHostKeyChecking=false","root@{0}".format(hostname),filepath]
     out,err,retcode = run_command(cmd)
     if retcode != 0:
-        if out:
-            print out
-        if err:
-            print err
-        sys.exit(retcode)
+       if (out or err):
+           print out,err
+       sys.exit(retcode)
     print "{0}OUTPUT OF {1}{0}\n".format("="*25,filename)
     return out
 
 # Check whether the hostname from vm-run and hostname returned from script on the virtual machine are the same.
 def sanity_check(hostname,out):
     print "{0}CHECKING HOSTNAMES{0}\n".format("="*25)
-    vmhostname = regex_find(r'Hostname: (.*?)\n', out)
+    vmhostname = re.findall(r'Hostname: (.*?)\n', out)
     # test vmhostname against the previous hostname, if they are not the same an error occured and will exit(1)
     # if hostname was not asked for in script (echo $hostname) then this will fail, but exit(0)
     if vmhostname:
         print "Hostname: ",hostname
-        print "Hostname returned: ", vmhostname
-        if vmhostname == hostname:
+        print "Hostname returned: ", vmhostname[0]
+        if vmhostname[0] == hostname:
             print "Both machine hostnames match!\n"
         else:
             print "Hostnames do not match. Something went wrong..."
-            sys.exit(1)
     else:
         print "Hostname could not be recovered from output of script."
-        sys.exit(0)
 
 def main():
     try:
@@ -187,13 +184,13 @@ def main():
 
         file_args,vmrun_args= process_arguments()
 
-        hostname = boot_virtual_machine(vmrun_args)
+        id,hostname = boot_virtual_machine(vmrun_args)
         print "Virtual machine ready!\n"
 
         virtual_machine_status(hostname)
 
         print "Waiting for SSH Server to become available...\n"
-        time.sleep( 10 )
+        time.sleep( 3 )
 
         secure_copy_file(hostname,file_args)
 
@@ -201,6 +198,8 @@ def main():
         print output
 
         sanity_check(hostname,output)
+        print "Attempting to shutdown virtual machine..."
+        kill_virtual_machine(id,hostname)
 
     except Exception as e:
         print "An unexpected error has occured.\n", e
