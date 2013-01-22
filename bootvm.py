@@ -91,6 +91,21 @@ def check_myproxy_logon():
         if (out or err):
             print out,err
         sys.exit(retcode)
+    cmd = ["/cvmfs/grid.cern.ch/3.2.11-1/globus/bin/grid-proxy-info"]
+    out,err,retcode = run_command(cmd)
+    if retcode != 0:
+        if (out or err):
+            print out,err
+        sys.exit(retcode)
+    out = out.split('\n')
+    temp = []
+    for line in out:
+        if 'timeleft' in line:
+            temp = line.split(':')
+    timeleft = int(temp[1])*60*60 + int(temp[2])*60 + int(temp[3])
+    if timeleft < 300:
+        print "Not enough time left on myproxy cert."
+        sys.exit(1)
 
 # Boot virtual machine and return hostname.
 def boot_virtual_machine(vmrun_args):
@@ -109,11 +124,12 @@ def boot_virtual_machine(vmrun_args):
     return id[0],hostname[0]
 
 # Kill VM with ID returns true for success.
-def kill_virtual_machine(id,hostname):
+def kill_virtual_machine(hostname):
     child = pexpect.spawn('/usr/local/bin/vm-list -a -k ?',timeout=120)
     child.expect('exit:')
     out = child.before.split('\n')
     for line in out:
+        print line
         if hostname in line:
             id = line.split()[0]
     child.sendline(id)
@@ -185,7 +201,6 @@ def main():
         file_args,vmrun_args= process_arguments()
 
         id,hostname = boot_virtual_machine(vmrun_args)
-        print "Virtual machine ready!\n"
 
         virtual_machine_status(hostname)
 
@@ -199,7 +214,7 @@ def main():
 
         sanity_check(hostname,output)
         print "Attempting to shutdown virtual machine..."
-        kill_virtual_machine(id,hostname)
+        kill_virtual_machine(hostname)
 
     except Exception as e:
         print "An unexpected error has occured.\n", e
