@@ -129,7 +129,6 @@ def kill_virtual_machine(hostname):
     child.expect('exit:')
     out = child.before.split('\n')
     for line in out:
-        print line
         if hostname in line:
             id = line.split()[0]
     child.sendline(id)
