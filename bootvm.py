@@ -7,7 +7,6 @@
 
 import subprocess
 import argparse
-import pexpect
 import time
 import sys
 import os
@@ -20,6 +19,9 @@ SHORT_LOCAL_PATH = '-lp'
 LONG_LOCAL_PATH = '--localpath'
 SHORT_REMOTE_PATH = '-rp'
 LONG_REMOTE_PATH = '--remotepath'
+
+# cloud your booting VM on.
+CLOUD = "Elephant"
 
 # Simple usage print out if arguments were not properly input
 USAGE = "\nbootvm.py Usage (not including vm-run arguments): \n\
@@ -123,17 +125,17 @@ def boot_virtual_machine(vmrun_args):
         sys.exit(1)
     return id[0],hostname[0]
 
-# Kill VM with ID returns true for success.
-def kill_virtual_machine(hostname):
-    child = pexpect.spawn('/usr/local/bin/vm-list -a -k ?',timeout=120)
-    child.expect('exit:')
-    out = child.before.split('\n')
-    for line in out:
-        if hostname in line:
-            id = line.split()[0]
-    child.sendline(id)
-    child.expect(pexpect.EOF)
-    print child.before
+# Kill VM on specific cloud with ID returns true for success.
+def kill_virtual_machine(id):
+    id = "{0}-{1}".format(CLOUD,id)
+    cmd = ["/usr/local/bin/vm-list","-c",CLOUD,"-k",id]
+    out,err,retcode = run_command(cmd)
+    if retcode != 0:
+        if out or err:
+            print out,err
+        sys.exit(1)
+    print out
+
 
 # Pings the hostname until its ready.
 def virtual_machine_status(hostname):
@@ -212,8 +214,9 @@ def main():
         print output
 
         sanity_check(hostname,output)
+
         print "Attempting to shutdown virtual machine..."
-        kill_virtual_machine(hostname)
+        kill_virtual_machine(id)
 
     except Exception as e:
         print "An unexpected error has occured.\n", e
