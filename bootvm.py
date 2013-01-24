@@ -92,6 +92,7 @@ def check_python_version():
         return
     else:
         print "Python version 2.7+ required.\nCurrent version: {0}.{1}.{2}".format(info.major,info.minor,info.micro)
+        sys.exit(1)
 
 # Check myproxy credentials.
 def check_myproxy_logon():
