@@ -85,6 +85,15 @@ def process_arguments():
         sys.exit(1)
     return file_args,vmrun_args
 
+# Check python version is > 2.6
+def check_python_version():
+    info = sys.version_info
+    if info.major > 2 or (info.major > 1 and info.minor > 6):
+        return
+    else:
+        print "Python version 2.7+ required.\nCurrent version: {0}.{1}.{2}".format(info.major,info.minor,info.micro)
+        sys.exit(1)
+
 # Check myproxy credentials.
 def check_myproxy_logon():
     cmd = ["/usr/local/bin/repoman","whoami"]
@@ -197,6 +206,7 @@ def sanity_check(hostname,out):
 
 def main():
     try:
+        check_python_version()
         check_myproxy_logon()
 
         file_args,vmrun_args= process_arguments()
