@@ -98,15 +98,13 @@ def check_python_version():
 def check_myproxy_logon():
     cmd = ["/usr/local/bin/repoman","whoami"]
     out,err,retcode = run_command(cmd)
-    if retcode != 0:
-        if (out or err):
-            print out,err
+    if retcode:
+        print out,err
         sys.exit(retcode)
     cmd = ["/cvmfs/grid.cern.ch/3.2.11-1/globus/bin/grid-proxy-info"]
     out,err,retcode = run_command(cmd)
-    if retcode != 0:
-        if (out or err):
-            print out,err
+    if retcode:
+        print err or out
         sys.exit(retcode)
     out = out.split('\n')
     temp = []
@@ -122,9 +120,8 @@ def check_myproxy_logon():
 def boot_virtual_machine(vmrun_args):
     cmd = ["/usr/local/bin/vm-run"] + vmrun_args
     out,err,retcode = run_command(cmd,timeout=300)
-    if retcode != 0:
-        if (out or err):
-            print out,err
+    if retcode:
+        print err or out
         sys.exit(retcode)
     print out
     hostname = re.findall(r'Hostname = (.*?)\n', out)
@@ -139,9 +136,8 @@ def kill_virtual_machine(id):
     id = "{0}-{1}".format(CLOUD,id)
     cmd = ["/usr/local/bin/vm-list","-c",CLOUD,"-k",id]
     out,err,retcode = run_command(cmd)
-    if retcode != 0:
-        if out or err:
-            print out,err
+    if retcode:
+        print err or out
         sys.exit(1)
     print out
 
@@ -168,10 +164,9 @@ def secure_copy_file(hostname,file_args):
     # create scp command.
     cmd = ["/usr/bin/scp","-o","StrictHostKeyChecking=false",localpath,"root@{0}:{1}".format(hostname,remotepath)]
     out,err,retcode = run_command(cmd)
-    if retcode != 0:
-       if (out or err):
-           print out,err
-       sys.exit(retcode)
+    if retcode:
+        print err or out
+        return
 
 # Run file on hostname and return its output.
 def run_remote_file(hostname,file_args):
@@ -181,10 +176,9 @@ def run_remote_file(hostname,file_args):
         # create ssh command
     cmd = ["/usr/bin/ssh","-o","StrictHostKeyChecking=false","root@{0}".format(hostname),filepath]
     out,err,retcode = run_command(cmd)
-    if retcode != 0:
-       if (out or err):
-           print out,err
-       sys.exit(retcode)
+    if retcode:
+        print err or out
+        return
     print "{0}OUTPUT OF {1}{0}\n".format("="*25,filename)
     return out
 
@@ -230,6 +224,7 @@ def main():
 
     except Exception as e:
         print "An unexpected error has occured.\n", e
+        kill_virtual_machine(id)
         sys.exit(1)
 
 if __name__ == "__main__":
