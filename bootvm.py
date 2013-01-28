@@ -143,16 +143,20 @@ def kill_virtual_machine(id):
 
 
 # Pings the hostname until its ready.
-def virtual_machine_status(hostname):
+def virtual_machine_status(hostname,timeout=30):
     print "Virtual machine booting with hostname {0}... Please wait.\n".format(hostname)
     cmd = ["ping","-c","1", hostname]
-
+    timeleft = timeout
     out,err,retcode = run_command(cmd)
     # if ping does not receive any reply packets its return code is 1, indicating host is not accessible.
-    # keep pinging until host become available.
-    while retcode != 0:
+    # keep pinging until host become available or timeout seconds have passed.
+    while retcode and timeleft:
         out,err,retcode = run_command(cmd)
         time.sleep( 1 )
+        timeleft -= 1
+    if not timeleft:
+        print "Could not reach {0} with timeout of {1}s".format(hostname,timeleft)
+
 
 # Copy file onto hostname using scp.
 def secure_copy_file(hostname,file_args):
